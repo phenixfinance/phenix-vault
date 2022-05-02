@@ -634,7 +634,9 @@ contract PhenixMultiSigFactory is Ownable {
     function setERC721DiscountFee(uint256 _percentage, uint256 _denominator)
         external
         onlyOwner
-    {}
+    {
+        erc721DiscountPercentage = _percentage;
+    }
 
     function setMultiSigDeploymentETHFee(uin256 _multiSigDeploymentETHFee)
         external
