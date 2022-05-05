@@ -311,11 +311,6 @@ abstract contract Ownable is Context {
     }
 }
 
-// SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.6.0) (token/ERC20/IERC20.sol)
-
-pragma solidity ^0.8.0;
-
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -638,14 +633,14 @@ contract PhenixMultiSigFactory is Ownable {
         erc721DiscountPercentage = _percentage;
     }
 
-    function setMultiSigDeploymentETHFee(uin256 _multiSigDeploymentETHFee)
+    function setMultiSigDeploymentETHFee(uint256 _multiSigDeploymentETHFee)
         external
         onlyOwner
     {
         multiSigDeploymentETHFee = _multiSigDeploymentETHFee;
     }
 
-    function setMultiSigDeploymentTokenFee(uin256 _multiSigDeploymentTokenFee)
+    function setMultiSigDeploymentTokenFee(uint256 _multiSigDeploymentTokenFee)
         external
         onlyOwner
     {
@@ -670,19 +665,16 @@ contract PhenixMultiSigFactory is Ownable {
 
     function generateMultiSigWalletWithETH(
         address[] memory _owners,
-        uint256 _numConfirmationsRequired,
-        uint256 _minTimestamp
+        uint256 _numConfirmationsRequired
     ) external payable canGenerateMultiSigWallet {}
 
     function generateMultiSigWalletWithTokens(
         address[] memory _owners,
-        uint256 _numConfirmationsRequired,
-        uint256 _minTimestamp
+        uint256 _numConfirmationsRequired
     ) external canPayTokenFee canGenerateMultiSigWallet {}
 
     function _generateMultiSigWallet(
         address[] memory _owners,
-        uint256 _numConfirmationsRequired,
-        uint256 _minTimestamp
+        uint256 _numConfirmationsRequired
     ) internal {}
 }

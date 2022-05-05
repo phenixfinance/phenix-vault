@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "hardhat/console.sol";
+
 contract PhenixMultiSig {
     event Deposit(address indexed sender, uint256 amount, uint256 balance);
     event SubmitTransaction(
         address indexed owner,
         uint256 indexed txIndex,
         address indexed to,
-        uint256 minimumTimestamp,
         uint256 value,
         bytes data
     );
@@ -19,13 +20,10 @@ contract PhenixMultiSig {
     address[] public owners;
     mapping(address => bool) public isOwner;
     uint256 public numConfirmationsRequired;
-    uint256 minimumTimestamp;
 
     struct Transaction {
         address to;
         uint256 value;
-        uint256 minTimestamp;
-        string note;
         bytes data;
         bool executed;
         bool rejected;
@@ -65,8 +63,7 @@ contract PhenixMultiSig {
 
     constructor(
         address[] memory _owners,
-        uint256 _numConfirmationsRequired,
-        uint256 _minTimestamp
+        uint256 _numConfirmationsRequired
     ) {
         require(_owners.length > 0, "owners required");
         require(
@@ -74,8 +71,6 @@ contract PhenixMultiSig {
                 _numConfirmationsRequired <= _owners.length,
             "invalid number of required confirmations"
         );
-
-        minimumTimestamp = _minTimestamp;
 
         for (uint256 i = 0; i < _owners.length; i++) {
             address owner = _owners[i];
@@ -94,25 +89,17 @@ contract PhenixMultiSig {
         emit Deposit(msg.sender, msg.value, address(this).balance);
     }
 
-    function _getMinTimestamp() internal view returns (uint256) {
-        return (block.timestamp + minimumTimestamp);
-    }
-
     function submitTransaction(
         address _to,
         uint256 _value,
-        string calldata _note,
         bytes memory _data
     ) public onlyOwner {
         uint256 txIndex = transactions.length;
-        uint256 min = _getMinTimestamp();
 
         transactions.push(
             Transaction({
                 to: _to,
                 value: _value,
-                minTimestamp: min,
-                note: _note,
                 data: _data,
                 executed: false,
                 rejected: false,
@@ -120,7 +107,7 @@ contract PhenixMultiSig {
             })
         );
 
-        emit SubmitTransaction(msg.sender, txIndex, _to, min, _value, _data);
+        emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
     }
 
     function confirmTransaction(uint256 _txIndex)
@@ -131,11 +118,56 @@ contract PhenixMultiSig {
         notConfirmed(_txIndex)
         notRejected(_txIndex)
     {
+        _confirmTransaction(_txIndex);
+    }
+
+    function _confirmTransaction(uint256 _txIndex) internal {
         Transaction storage transaction = transactions[_txIndex];
         transaction.numConfirmations += 1;
         isConfirmed[_txIndex][msg.sender] = true;
 
         emit ConfirmTransaction(msg.sender, _txIndex);
+    }
+
+    function confirmAndExecuteTransaction(
+        uint256 _txIndex,
+        uint256[] memory _timestamps,
+        address[] memory _signers,
+        bytes[] memory _signatures
+    )
+        external
+        onlyOwner
+        txExists(_txIndex)
+        notExecuted(_txIndex)
+        notRejected(_txIndex)
+    {
+        require(
+            _signatures.length == _signers.length &&
+            _signatures.length > 0,
+            "There must be the same amount as signatures as there is signers."
+        );
+
+        // iterate over the _signers to confirm that the signers are owners
+        for(uint256 i = 0; i < _signatures.length; i++) {
+            require(isOwner[_signers[i]] == true, "One or more of the signers is not an owner.");
+            bool _isValid = verify(_txIndex, _timestamps[i], _signers[i], _signatures[i]);
+            console.log(_isValid);
+        }
+    }
+
+    function verify(
+        uint256 _txIndex,
+        uint256 _timestamp,
+        address _signer,
+        bytes memory _signature
+    ) public view returns (bool) {
+        bytes32 messageHash = getMessageHash(
+            _txIndex,
+            _timestamp
+        );
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, _signature) == _signer;
     }
 
     function executeTransaction(uint256 _txIndex)
@@ -145,11 +177,14 @@ contract PhenixMultiSig {
         notExecuted(_txIndex)
         notRejected(_txIndex)
     {
+        _executeTransaction(_txIndex);
+    }
+
+    function _executeTransaction(uint256 _txIndex) internal {
         Transaction storage transaction = transactions[_txIndex];
 
         require(
-            transaction.numConfirmations >= numConfirmationsRequired ||
-                transaction.minTimestamp < block.timestamp,
+            transaction.numConfirmations >= numConfirmationsRequired,
             "cannot execute tx"
         );
 
@@ -211,8 +246,6 @@ contract PhenixMultiSig {
         returns (
             address to,
             uint256 value,
-            uint256 minTimestamp,
-            string memory note,
             bytes memory data,
             bool rejected,
             bool executed,
@@ -224,12 +257,71 @@ contract PhenixMultiSig {
         return (
             transaction.to,
             transaction.value,
-            transaction.minTimestamp,
-            transaction.note,
             transaction.data,
             transaction.rejected,
             transaction.executed,
             transaction.numConfirmations
         );
+    }
+
+    function getMessageHash(
+        uint256 _txIndex,
+        uint256 _timestamp
+    ) public pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    _txIndex,
+                    _timestamp
+                )
+            );
+    }
+    
+    function recoverSigner(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature
+    ) public pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function getEthSignedMessageHash(bytes32 _messageHash)
+        public
+        pure
+        returns (bytes32)
+    {
+        /*
+        Signature is produced by signing a keccak256 hash with the following format:
+        "\x19Ethereum Signed Message\n" + len(msg) + msg
+        */
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19Ethereum Signed Message:\n32",
+                    _messageHash
+                )
+            );
+    }
+
+    function splitSignature(bytes memory sig)
+        public
+        pure
+        returns (
+            bytes32 r,
+            bytes32 s,
+            uint8 v
+        )
+    {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+            // second 32 bytes
+            s := mload(add(sig, 64))
+            // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
     }
 }
