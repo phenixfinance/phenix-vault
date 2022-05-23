@@ -577,27 +577,40 @@ contract PhenixMultiSigFactory is Ownable {
      * -
      */
 
+    address constant DEAD = 0x000000000000000000000000000000000000dEaD;
+
     uint256 public multiSigDeploymentETHFee;
     uint256 public multiSigDeploymentTokenFee;
     address public payableTokenAddress;
     address public erc721TokenAddress;
     uint256 public erc721DiscountPercentage;
     uint256 public erc721DiscountPercentageDenominator;
+    address public feeAllocationAddress;
+    uint256 public feeAllocationPercentage;
+    uint256 public feeAllocationPercentageDenominator;
+
     bool public isEnabled;
 
     constructor(
         uint256 _multiSigDeploymentETHFee,
         uint256 _multiSigDeploymentTokenFee,
         address _payableTokenAddress,
-        address _erc721TokenAddress
+        address _erc721TokenAddress,
+        address _feeAllocationAddress
     ) {
         multiSigDeploymentETHFee = _multiSigDeploymentETHFee;
         multiSigDeploymentTokenFee = _multiSigDeploymentTokenFee;
         payableTokenAddress = _payableTokenAddress;
         erc721TokenAddress = _erc721TokenAddress;
+        feeAllocationAddress = _feeAllocationAddress;
 
-        erc721DiscountPercentage = 50;
+        erc721DiscountPercentage = 25;
         erc721DiscountPercentageDenominator = 100;
+
+        feeAllocationPercentage = 1;
+        feeAllocationPercentageDenominator = 100;
+
+        isEnabled = true;
     }
 
     modifier canPayTokenFee() {
@@ -631,6 +644,15 @@ contract PhenixMultiSigFactory is Ownable {
         onlyOwner
     {
         erc721DiscountPercentage = _percentage;
+        erc721DiscountPercentageDenominator = _denominator;
+    }
+
+    function setFeeAllocationPercentage(
+        uint256 _percentage,
+        uint256 _denominator
+    ) external onlyOwner {
+        feeAllocationPercentage = _percentage;
+        feeAllocationPercentageDenominator = _denominator;
     }
 
     function setMultiSigDeploymentETHFee(uint256 _multiSigDeploymentETHFee)
@@ -661,6 +683,21 @@ contract PhenixMultiSigFactory is Ownable {
 
     function getBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    function takeFees() external onlyOwner {
+        if (IERC20(payableTokenAddress).balanceOf(address(this)) > 0) {
+            IERC20(payableTokenAddress).transfer(
+                msg.sender,
+                IERC20(payableTokenAddress).balanceOf(address(this))
+            );
+        }
+
+        if (address(this).balance > 0) {
+            (bool success, ) = address(msg.sender).call{
+                value: address(this).balance
+            }("");
+        }
     }
 
     function generateMultiSigWalletWithETH(

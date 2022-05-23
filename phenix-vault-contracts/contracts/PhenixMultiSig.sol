@@ -61,10 +61,7 @@ contract PhenixMultiSig {
         _;
     }
 
-    constructor(
-        address[] memory _owners,
-        uint256 _numConfirmationsRequired
-    ) {
+    constructor(address[] memory _owners, uint256 _numConfirmationsRequired) {
         require(_owners.length > 0, "owners required");
         require(
             _numConfirmationsRequired > 0 &&
@@ -118,15 +115,15 @@ contract PhenixMultiSig {
         notConfirmed(_txIndex)
         notRejected(_txIndex)
     {
-        _confirmTransaction(_txIndex);
+        _confirmTransaction(_txIndex, msg.sender);
     }
 
-    function _confirmTransaction(uint256 _txIndex) internal {
+    function _confirmTransaction(uint256 _txIndex, address _signer) internal {
         Transaction storage transaction = transactions[_txIndex];
         transaction.numConfirmations += 1;
-        isConfirmed[_txIndex][msg.sender] = true;
+        isConfirmed[_txIndex][_signer] = true;
 
-        emit ConfirmTransaction(msg.sender, _txIndex);
+        emit ConfirmTransaction(_signer, _txIndex);
     }
 
     function confirmAndExecuteTransaction(
@@ -142,17 +139,29 @@ contract PhenixMultiSig {
         notRejected(_txIndex)
     {
         require(
-            _signatures.length == _signers.length &&
-            _signatures.length > 0,
+            _signatures.length == _signers.length && _signatures.length > 0,
             "There must be the same amount as signatures as there is signers."
         );
 
         // iterate over the _signers to confirm that the signers are owners
-        for(uint256 i = 0; i < _signatures.length; i++) {
-            require(isOwner[_signers[i]] == true, "One or more of the signers is not an owner.");
-            bool _isValid = verify(_txIndex, _timestamps[i], _signers[i], _signatures[i]);
-            console.log(_isValid);
+        for (uint256 i = 0; i < _signatures.length; i++) {
+            require(
+                isOwner[_signers[i]] == true,
+                "One or more of the signers is not an owner."
+            );
+            bool _isValid = verify(
+                _txIndex,
+                _timestamps[i],
+                _signers[i],
+                _signatures[i]
+            );
+
+            if (_isValid == true) {
+                _confirmTransaction(_txIndex, _signers[i]);
+            }
         }
+
+        _executeTransaction(_txIndex);
     }
 
     function verify(
@@ -161,10 +170,7 @@ contract PhenixMultiSig {
         address _signer,
         bytes memory _signature
     ) public view returns (bool) {
-        bytes32 messageHash = getMessageHash(
-            _txIndex,
-            _timestamp
-        );
+        bytes32 messageHash = getMessageHash(_txIndex, _timestamp);
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
         return recoverSigner(ethSignedMessageHash, _signature) == _signer;
@@ -264,19 +270,14 @@ contract PhenixMultiSig {
         );
     }
 
-    function getMessageHash(
-        uint256 _txIndex,
-        uint256 _timestamp
-    ) public pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    _txIndex,
-                    _timestamp
-                )
-            );
+    function getMessageHash(uint256 _txIndex, uint256 _timestamp)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(_txIndex, _timestamp));
     }
-    
+
     function recoverSigner(
         bytes32 _ethSignedMessageHash,
         bytes memory _signature
