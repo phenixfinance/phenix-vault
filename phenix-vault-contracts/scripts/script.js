@@ -20,8 +20,11 @@ async function main() {
   ];
 
   // We get the contract to deploy
+  const Token = await hre.ethers.getContractFactory("ERC20_TEST_TOKEN");
   const MultiSig = await hre.ethers.getContractFactory("PhenixMultiSig");
+  const PhenixMultiSigFactory = await hre.ethers.getContractFactory("PhenixMultiSigFactory");
   const multisig = await MultiSig.deploy(owners, 3);
+  const token = await Token.deploy("Test Token", "TTOK", hre.ethers.utils.parseEther("10000000000000"));
 
   await multisig.deployed();
 
@@ -33,13 +36,16 @@ async function main() {
   // send funds to multiSig wallet
   tx = {
     to: multisig.address,
-    value: hre.ethers.utils.parseEther("1.0"),
+    value: hre.ethers.utils.parseEther("100.0"),
   };
 
   await signer1.sendTransaction(tx);
 
   // submit transaction @ index 0
-  await mSigAsS1.submitTransaction(owners[2], 0, "0x");
+  await mSigAsS1.submitTransaction(signer2.address, hre.ethers.utils.parseEther("5.0"), "0x");
+
+  console.log("Signer 2 Balance:", await signer2.getBalance());
+  console.log("Multi-sig Balance:", await hre.ethers.provider.getBalance(multisig.address));
 
   // fetch submitted transaction details
   console.log("Transaction: 0");
@@ -94,8 +100,9 @@ async function main() {
   // fetch submitted transaction details
   console.log("Transaction: 0");
   await mSigAsS1.getTransaction(0).then((_transaction) => {
-    console.log(_transaction);
+    // console.log(_transaction);
   });
+
 
   // verify
   // console.log(await mSigAsS1.verify("0", currentTime.toString(), owners[0], s1Signature));

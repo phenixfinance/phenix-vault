@@ -591,6 +591,10 @@ contract PhenixMultiSigFactory is Ownable {
 
     bool public isEnabled;
 
+    mapping(address => address[]) public contractToOwnersMapping;
+    mapping(address => address) public ownersToContractMapping;
+    address[] public deployedContracts;
+
     constructor(
         uint256 _multiSigDeploymentETHFee,
         uint256 _multiSigDeploymentTokenFee,
@@ -700,10 +704,32 @@ contract PhenixMultiSigFactory is Ownable {
         }
     }
 
+    function _userCost(uint256 _amount, address _user)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 _result = _amount;
+        if (IERC721(erc721TokenAddress).balanceOf(_user) > 0) {
+            // Apply NFT Fee to amount
+            _result = _result.mul(erc721DiscountPercentage).div(
+                erc721DiscountPercentageDenominator
+            );
+            _result = _amount - _result;
+        }
+        return _result;
+    }
+
     function generateMultiSigWalletWithETH(
         address[] memory _owners,
         uint256 _numConfirmationsRequired
-    ) external payable canGenerateMultiSigWallet {}
+    ) external payable canGenerateMultiSigWallet {
+        uint256 amountToPay = _userCost(multiSigDeploymentETHFee, msg.sender);
+        require(
+            msg.value >= _userCost(amountToPay, msg.sender),
+            "Not enough ETH to cover cost."
+        );
+    }
 
     function generateMultiSigWalletWithTokens(
         address[] memory _owners,
@@ -713,5 +739,16 @@ contract PhenixMultiSigFactory is Ownable {
     function _generateMultiSigWallet(
         address[] memory _owners,
         uint256 _numConfirmationsRequired
-    ) internal {}
+    ) internal {
+        PhenixMultiSig _newMultiSigWallet = new PhenixMultiSig(
+            _owners,
+            _numConfirmationsRequired
+        );
+
+        deployedContracts.push(address(_newMultiSigWallet));
+        contractToOwnersMapping[address(_newMultiSigWallet)] = _owners;
+        for (uint256 i = 0; i < _owners.length; i++) {
+            ownersToContractMapping[_owners[i]] = address(_newMultiSigWallet);
+        }
+    }
 }
