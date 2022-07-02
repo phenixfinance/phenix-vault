@@ -21,17 +21,43 @@ async function main() {
 
   // We get the contract to deploy
   const Token = await hre.ethers.getContractFactory("ERC20_TEST_TOKEN");
+  const NFT = await hre.ethers.getContractFactory("ERC721_TEST_NFT");
   const MultiSig = await hre.ethers.getContractFactory("PhenixMultiSig");
-  const PhenixMultiSigFactory = await hre.ethers.getContractFactory("PhenixMultiSigFactory");
+  const PhenixMultiSigFactory = await hre.ethers.getContractFactory(
+    "PhenixMultiSigFactory"
+  );
   const multisig = await MultiSig.deploy(owners, 3);
-  const token = await Token.deploy("Test Token", "TTOK", hre.ethers.utils.parseEther("10000000000000"));
 
   await multisig.deployed();
+
+  const token = await Token.deploy(
+    "Test Token",
+    "TTOK",
+    hre.ethers.utils.parseEther("10000000000000")
+  );
+
+  await token.deployed();
+
+  const nft = await NFT.deploy("NFT", "NFT");
+
+  await nft.deployed();
+
+  const phenixMultiSigFactory = await PhenixMultiSigFactory.deploy(
+    hre.ethers.utils.parseEther("100"),
+    hre.ethers.utils.parseEther("500"),
+    token.address,
+    nft.address,
+    signer1.address
+  );
+
+  await phenixMultiSigFactory.deployed();
 
   // connect signers
   const mSigAsS1 = multisig.connect(signer1);
   const mSigAsS2 = multisig.connect(signer2);
   const mSigAsS3 = multisig.connect(signer3);
+
+  console.log(await phenixMultiSigFactory.getContractsOfOwner(signer1.address));
 
   // send funds to multiSig wallet
   tx = {
@@ -42,10 +68,44 @@ async function main() {
   await signer1.sendTransaction(tx);
 
   // submit transaction @ index 0
-  await mSigAsS1.submitTransaction(signer2.address, hre.ethers.utils.parseEther("5.0"), "0x");
+  await mSigAsS1.submitTransaction(
+    signer2.address,
+    hre.ethers.utils.parseEther("5.0"),
+    "0x"
+  );
 
   console.log("Signer 2 Balance:", await signer2.getBalance());
-  console.log("Multi-sig Balance:", await hre.ethers.provider.getBalance(multisig.address));
+  console.log(
+    "Multi-sig Balance:",
+    await hre.ethers.provider.getBalance(multisig.address)
+  );
+
+  // signer 1 check cost
+  console.log(
+    "Signer 1 Cost:",
+    await phenixMultiSigFactory.userCost(
+      hre.ethers.utils.parseEther("100"),
+      signer1.address
+    )
+  );
+
+  await phenixMultiSigFactory
+    .connect(signer1)
+    .generateMultiSigWalletWithETH(owners, 3, {
+      value: hre.ethers.utils.parseEther("75"),
+    });
+
+  // signer 1 mint NFT
+  await nft.mint(1);
+
+  // signer 1 check cost
+  console.log(
+    "Signer 1 Cost:",
+    await phenixMultiSigFactory.userCost(
+      hre.ethers.utils.parseEther("100"),
+      signer1.address
+    )
+  );
 
   // fetch submitted transaction details
   console.log("Transaction: 0");
@@ -102,7 +162,6 @@ async function main() {
   await mSigAsS1.getTransaction(0).then((_transaction) => {
     // console.log(_transaction);
   });
-
 
   // verify
   // console.log(await mSigAsS1.verify("0", currentTime.toString(), owners[0], s1Signature));
