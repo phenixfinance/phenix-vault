@@ -34,8 +34,17 @@ contract PhenixMultiSigFactory is Ownable {
 
     bool public isEnabled;
 
+    struct Fees {
+        uint256 feeETH;
+        uint256 feeToken;
+    }
+
     mapping(address => address[]) public contractToOwnersMapping;
-    mapping(address => address[]) public ownerToContractMapping;
+    mapping(address => address) public ownersToContractMapping;
+    mapping(address => bool) public factoryAdmins;
+
+    mapping(uint256 => Fees) public multiSigTypeFees;
+
     address[] public deployedContracts;
 
     constructor(
@@ -45,8 +54,6 @@ contract PhenixMultiSigFactory is Ownable {
         address _erc721TokenAddress,
         address _feeAllocationAddress
     ) {
-        multiSigDeploymentETHFee = _multiSigDeploymentETHFee;
-        multiSigDeploymentTokenFee = _multiSigDeploymentTokenFee;
         payableTokenAddress = _payableTokenAddress;
         erc721TokenAddress = _erc721TokenAddress;
         feeAllocationAddress = _feeAllocationAddress;
@@ -58,6 +65,8 @@ contract PhenixMultiSigFactory is Ownable {
         feeAllocationPercentageDenominator = 100;
 
         isEnabled = true;
+
+        _setTypeFee(0, _multiSigDeploymentETHFee, _multiSigDeploymentTokenFee);
     }
 
     modifier canPayTokenFee() {
@@ -84,6 +93,31 @@ contract PhenixMultiSigFactory is Ownable {
             "PhenixMultiSigFactory is not currently enabled."
         );
         _;
+    }
+
+    function _setTypeFee(
+        uint256 _index,
+        uint256 _ethFee,
+        uint256 _tokenFee
+    ) internal {
+        multiSigTypeFees[_index].feeETH = _ethFee;
+        multiSigTypeFees[_index].feeToken = _tokenFee;
+    }
+
+    function setTypeFee(
+        uint256 _index,
+        uint256 _ethFee,
+        uint256 _tokenFee
+    ) external onlyOwner {
+        _setTypeFee(_index, _ethFee, _tokenFee);
+    }
+
+    function _setAdminAddress(address _admin, bool _state) internal {
+        factoryAdmins[_admin] = _state;
+    }
+
+    function setAdminAddress(address _admin, bool _state) external onlyOwner {
+        _setAdminAddress(_admin, _state);
     }
 
     function setERC721DiscountFee(uint256 _percentage, uint256 _denominator)
