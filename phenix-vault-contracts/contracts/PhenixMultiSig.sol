@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
 contract PhenixMultiSig {
+    using SafeMath for uint256;
+
     event Deposit(address indexed sender, uint256 amount, uint256 balance);
     event SubmitTransaction(
         address indexed owner,
@@ -26,6 +30,12 @@ contract PhenixMultiSig {
         bool executed;
         bool rejected;
         uint256 numConfirmations;
+    }
+
+    struct TransactionsInfo {
+        uint256 numberOfConfirmed;
+        uint256 numberOfPending;
+        uint256 numberOfExecuted;
     }
 
     // mapping from tx index => owner => bool
@@ -60,18 +70,18 @@ contract PhenixMultiSig {
     }
 
     constructor(address[] memory _owners, uint256 _numConfirmationsRequired) {
-        require(_owners.length > 0, "owners required");
+        require(_owners.length > 0, "No owners provided.");
         require(
             _numConfirmationsRequired > 0 &&
                 _numConfirmationsRequired <= _owners.length,
-            "invalid number of required confirmations"
+            "Invalid minimum confirmations."
         );
 
         for (uint256 i = 0; i < _owners.length; i++) {
             address owner = _owners[i];
 
-            require(owner != address(0), "invalid owner");
-            require(!isOwner[owner], "owner not unique");
+            require(owner != address(0), "Invalid owner");
+            require(!isOwner[owner], "Duplicate owner was provided.");
 
             isOwner[owner] = true;
             owners.push(owner);
@@ -162,18 +172,6 @@ contract PhenixMultiSig {
         _executeTransaction(_txIndex);
     }
 
-    function verify(
-        uint256 _txIndex,
-        uint256 _timestamp,
-        address _signer,
-        bytes memory _signature
-    ) public view returns (bool) {
-        bytes32 messageHash = getMessageHash(_txIndex, _timestamp);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-
-        return recoverSigner(ethSignedMessageHash, _signature) == _signer;
-    }
-
     function executeTransaction(uint256 _txIndex)
         public
         onlyOwner
@@ -189,7 +187,7 @@ contract PhenixMultiSig {
 
         require(
             transaction.numConfirmations >= numConfirmationsRequired,
-            "cannot execute tx"
+            "Minimum confimations not reached. Execution failed."
         );
 
         transaction.executed = true;
@@ -244,6 +242,132 @@ contract PhenixMultiSig {
         emit Deposit(msg.sender, msg.value, address(this).balance);
     }
 
+    function getTransactions() external view returns (Transaction[] memory) {
+        return transactions;
+    }
+
+    function numberOfPendingTransactions() public view returns (uint256) {
+        uint256 result = 0;
+
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (
+                transactions[i].numConfirmations != numConfirmationsRequired &&
+                transactions[i].executed == false &&
+                transactions[i].rejected == false
+            ) {
+                result = result.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function getPendingTransaction()
+        external
+        view
+        returns (Transaction[] memory)
+    {
+        Transaction[] memory result = new Transaction[](
+            numberOfPendingTransactions()
+        );
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (
+                transactions[i].numConfirmations != numConfirmationsRequired &&
+                transactions[i].executed == false &&
+                transactions[i].rejected == false
+            ) {
+                result[index] = transactions[i];
+                index = index.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function numberOfExecutedTransactions() public view returns (uint256) {
+        uint256 result = 0;
+
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (transactions[i].executed == true) {
+                result = result.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function getExecutedTransactions()
+        external
+        view
+        returns (Transaction[] memory)
+    {
+        Transaction[] memory result = new Transaction[](
+            numberOfExecutedTransactions()
+        );
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (transactions[i].executed == true) {
+                result[index] = transactions[i];
+                index = index.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function numberOfConfirmedTransactions() public view returns (uint256) {
+        uint256 result = 0;
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (
+                transactions[i].numConfirmations == numConfirmationsRequired &&
+                transactions[i].executed == false
+            ) {
+                result = result.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function getConfirmedTransactions()
+        external
+        view
+        returns (Transaction[] memory)
+    {
+        Transaction[] memory result = new Transaction[](
+            numberOfConfirmedTransactions()
+        );
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < transactions.length; i++) {
+            if (
+                transactions[i].numConfirmations == numConfirmationsRequired &&
+                transactions[i].executed == false
+            ) {
+                result[index] = transactions[i];
+                index = index.add(1);
+            }
+        }
+
+        return result;
+    }
+
+    function getTransactionsInfo()
+        external
+        view
+        returns (TransactionsInfo memory)
+    {
+        return
+            TransactionsInfo(
+                numberOfConfirmedTransactions(),
+                numberOfPendingTransactions(),
+                numberOfExecutedTransactions()
+            );
+    }
+
     function getTransaction(uint256 _txIndex)
         public
         view
@@ -283,6 +407,18 @@ contract PhenixMultiSig {
         (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function verify(
+        uint256 _txIndex,
+        uint256 _timestamp,
+        address _signer,
+        bytes memory _signature
+    ) public pure returns (bool) {
+        bytes32 messageHash = getMessageHash(_txIndex, _timestamp);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, _signature) == _signer;
     }
 
     function getEthSignedMessageHash(bytes32 _messageHash)

@@ -24,4 +24,20 @@ module.exports = {
       runs: 200,
     },
   },
+  defaultNetwork: "hardhat",
+  networks: {
+    hardhat: {
+        blockGasLimit: 100000000429720, // whatever you want here,
+        allowUnlimitedContractSize: true,
+        accounts: {
+          mnemonic:
+            "phenix finance lotto test test test test test test test test test",
+          initialIndex: 0,
+          path: "m/44'/60'/0'/0",
+          count: 200,
+          accountsBalance: "100000000000000000000000000",
+          passphrase: "phenix-finance-lotto-pass-phrase",
+        },
+    },
+}
 };

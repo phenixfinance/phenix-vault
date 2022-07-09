@@ -21,9 +21,6 @@ contract PhenixMultiSigFactory is Ownable {
      */
 
     address constant DEAD = 0x000000000000000000000000000000000000dEaD;
-
-    uint256 public multiSigDeploymentETHFee;
-    uint256 public multiSigDeploymentTokenFee;
     address public payableTokenAddress;
     address public erc721TokenAddress;
     uint256 public erc721DiscountPercentage;
@@ -39,10 +36,15 @@ contract PhenixMultiSigFactory is Ownable {
         uint256 feeToken;
     }
 
-    mapping(address => address[]) public contractToOwnersMapping;
-    mapping(address => address) public ownersToContractMapping;
-    mapping(address => bool) public factoryAdmins;
+    struct MultiSigWalletInfo {
+        address[] owners;
+        uint256 contractType;
+    }
 
+    mapping(address => address[]) public contractToOwnersMapping;
+    mapping(address => address[]) public ownersToContractMapping;
+    mapping(address => uint256) public contractType;
+    mapping(address => bool) public factoryAdmins;
     mapping(uint256 => Fees) public multiSigTypeFees;
 
     address[] public deployedContracts;
@@ -66,21 +68,22 @@ contract PhenixMultiSigFactory is Ownable {
 
         isEnabled = true;
 
+        _setAdminAddress(msg.sender, true);
         _setTypeFee(0, _multiSigDeploymentETHFee, _multiSigDeploymentTokenFee);
     }
 
-    modifier canPayTokenFee() {
+    modifier canPayTokenFee(uint256 _type) {
         require(
             IERC20(payableTokenAddress).allowance(
                 address(msg.sender),
                 address(this)
-            ) >= userCost(multiSigDeploymentTokenFee, msg.sender),
+            ) >= userCost(multiSigTypeFees[_type].feeToken, msg.sender),
             "PhenixMultiSigFactory contract does not have enough allowance to spend tokens on behalf of the user."
         );
 
         require(
             IERC20(payableTokenAddress).balanceOf(address(msg.sender)) >=
-                userCost(multiSigDeploymentTokenFee, msg.sender),
+                userCost(multiSigTypeFees[_type].feeToken, msg.sender),
             "User does not have enough tokens to pay for PhenixMultiSig deployment fee."
         );
 
@@ -91,6 +94,15 @@ contract PhenixMultiSigFactory is Ownable {
         require(
             isEnabled == true,
             "PhenixMultiSigFactory is not currently enabled."
+        );
+        _;
+    }
+
+    modifier isValidType(uint256 _type) {
+        require(
+            multiSigTypeFees[_type].feeETH != 0 ||
+                multiSigTypeFees[_type].feeToken != 0,
+            "Invalid Fee Type Used."
         );
         _;
     }
@@ -136,20 +148,6 @@ contract PhenixMultiSigFactory is Ownable {
         feeAllocationPercentageDenominator = _denominator;
     }
 
-    function setMultiSigDeploymentETHFee(uint256 _multiSigDeploymentETHFee)
-        external
-        onlyOwner
-    {
-        multiSigDeploymentETHFee = _multiSigDeploymentETHFee;
-    }
-
-    function setMultiSigDeploymentTokenFee(uint256 _multiSigDeploymentTokenFee)
-        external
-        onlyOwner
-    {
-        multiSigDeploymentTokenFee = _multiSigDeploymentTokenFee;
-    }
-
     function setPayableTokenAddress(address _tokenAddress) external onlyOwner {
         payableTokenAddress = _tokenAddress;
     }
@@ -166,6 +164,26 @@ contract PhenixMultiSigFactory is Ownable {
         return address(this).balance;
     }
 
+    function getMultiSigWalletType(address _contractAddress)
+        public
+        view
+        returns (uint256)
+    {
+        return contractType[_contractAddress];
+    }
+
+    function getMultiSigWalletInfo(address _contractAddress)
+        external
+        view
+        returns (MultiSigWalletInfo memory)
+    {
+        return
+            MultiSigWalletInfo(
+                getOwnersOfContract(_contractAddress),
+                getMultiSigWalletType(_contractAddress)
+            );
+    }
+
     function getOwnersOfContract(address _address)
         public
         view
@@ -179,7 +197,15 @@ contract PhenixMultiSigFactory is Ownable {
         view
         returns (address[] memory)
     {
-        return ownerToContractMapping[_address];
+        return ownersToContractMapping[_address];
+    }
+
+    function getDeployedContracts() external view returns (address[] memory) {
+        return deployedContracts;
+    }
+
+    function numberOfDeployedContracts() external view returns (uint256) {
+        return deployedContracts.length;
     }
 
     function takeFees() external onlyOwner {
@@ -210,50 +236,78 @@ contract PhenixMultiSigFactory is Ownable {
             );
             _result = _amount - _result;
         }
-        return _result;
+        return factoryAdmins[msg.sender] == false ? _result : 0;
     }
 
     function generateMultiSigWalletWithETH(
-        address[] memory _owners,
-        uint256 _numConfirmationsRequired
-    ) external payable canGenerateMultiSigWallet {
-        uint256 amountToPay = userCost(multiSigDeploymentETHFee, msg.sender);
-        require(msg.value >= amountToPay, "Not enough ETH to cover cost.");
+        address[] calldata _owners,
+        uint256 _numConfirmationsRequired,
+        uint256 _type
+    ) external payable canGenerateMultiSigWallet isValidType(_type) {
+        require(
+            multiSigTypeFees[_type].feeETH != 0,
+            "No ETH fee set for this type."
+        );
 
-        _generateMultiSigWallet(_owners, _numConfirmationsRequired);
+        uint256 amountToPay = userCost(
+            multiSigTypeFees[_type].feeETH,
+            msg.sender
+        );
+        require(
+            msg.value >= userCost(amountToPay, msg.sender),
+            "Not enough ETH to cover cost."
+        );
+
+        _generateMultiSigWallet(_owners, _numConfirmationsRequired, _type);
     }
 
     function generateMultiSigWalletWithTokens(
-        address[] memory _owners,
-        uint256 _numConfirmationsRequired
-    ) external canPayTokenFee canGenerateMultiSigWallet {
-        uint256 amountToPay = userCost(multiSigDeploymentTokenFee, msg.sender);
+        address[] calldata _owners,
+        uint256 _numConfirmationsRequired,
+        uint256 _type
+    )
+        external
+        canPayTokenFee(_type)
+        isValidType(_type)
+        canGenerateMultiSigWallet
+    {
+        require(
+            multiSigTypeFees[_type].feeToken != 0,
+            "No token fee set for this type."
+        );
+
+        uint256 amountToPay = userCost(
+            multiSigTypeFees[_type].feeToken,
+            msg.sender
+        );
         IERC20(payableTokenAddress).transferFrom(
             msg.sender,
             address(this),
             amountToPay
         );
-        _generateMultiSigWallet(_owners, _numConfirmationsRequired);
+
+        _generateMultiSigWallet(_owners, _numConfirmationsRequired, _type);
     }
 
     function _generateMultiSigWallet(
-        address[] memory _owners,
-        uint256 _numConfirmationsRequired
+        address[] calldata _owners,
+        uint256 _numConfirmationsRequired,
+        uint256 _type
     ) internal {
-        /*PhenixMultiSig _newMultiSigWallet = new PhenixMultiSig(
+        PhenixMultiSig _newMultiSigWallet = new PhenixMultiSig(
             _owners,
             _numConfirmationsRequired
-        );*/
-
-        // TEMP
-        address _newMultiSigWallet = DEAD;
+        );
 
         deployedContracts.push(address(_newMultiSigWallet));
         contractToOwnersMapping[address(_newMultiSigWallet)] = _owners;
         for (uint256 i = 0; i < _owners.length; i++) {
-            ownerToContractMapping[_owners[i]].push(
+            ownersToContractMapping[_owners[i]].push(
                 address(_newMultiSigWallet)
             );
         }
+
+        contractType[address(_newMultiSigWallet)] = _type;
+        deployedContracts.push(address(_newMultiSigWallet));
     }
 }
