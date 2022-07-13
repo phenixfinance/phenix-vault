@@ -8,7 +8,6 @@ const hre = require("hardhat");
 async function main() {
   const currentTime = Math.floor(Date.now() / 1000);
 
-  
   // owner signers
   const signer1 = await hre.ethers.getSigner(0);
   const signer2 = await hre.ethers.getSigner(1);
@@ -48,7 +47,7 @@ async function main() {
   console.log(await phenixMultiSigFactory.getContractsOfOwner(signer1.address));
 
   // signer 1 check cost
-  var deployedContract = '';
+  var deployedContract = "";
   console.log(
     "Signer 1 Cost:",
     await phenixMultiSigFactory.userCost(
@@ -62,18 +61,24 @@ async function main() {
 
   await phenixMultiSigFactory
     .connect(signer1)
-    .generateMultiSigWalletWithETH(owners, 3, 0, {
+    .generateMultiSigWalletWithETH("Jake's Wallet", owners, 3, 0, {
       value: hre.ethers.utils.parseEther("0"),
-    }).then(async (_data) => {
-      await _data.wait().then(async (_res) => {
-        await phenixMultiSigFactory.getContractsOfOwner(signer1.address).then((_contracts) => {
-          deployedContract = _contracts[_contracts.length - 1];
-          console.log("Deployed Multi-sig Wallet to: " + deployedContract);
-        })
-      });
     })
-  
-  const multisig = await hre.ethers.getContractAt("PhenixMultiSig", deployedContract);
+    .then(async (_data) => {
+      await _data.wait().then(async (_res) => {
+        await phenixMultiSigFactory
+          .getContractsOfOwner(signer1.address)
+          .then((_contracts) => {
+            deployedContract = _contracts[_contracts.length - 1];
+            console.log("Deployed Multi-sig Wallet to: " + deployedContract);
+          });
+      });
+    });
+
+  const multisig = await hre.ethers.getContractAt(
+    "PhenixMultiSig",
+    deployedContract
+  );
 
   // connect signers
   const mSigAsS1 = multisig.connect(signer1);
@@ -100,7 +105,6 @@ async function main() {
     "Multi-sig Balance:",
     await hre.ethers.provider.getBalance(multisig.address)
   );
-
 
   // signer 1 check cost
   console.log(
@@ -141,7 +145,7 @@ async function main() {
 
   // #3
   const s3HashMessage = await mSigAsS3.getMessageHash(
-    "1",
+    "0",
     currentTime.toString()
   );
   const s3Signature = await signer3.signMessage(
@@ -151,10 +155,12 @@ async function main() {
   // prepare data
   const transactionIndex = "0";
   const timestamps = [currentTime, currentTime, currentTime];
-  const signers = [owners[0], owners[1], owners[2]];
-  const signatures = [s1Signature, s2Signature, s3Signature];
+  const signers = [owners[2], owners[0], owners[1]];
+  const signatures = [s3Signature, s1Signature, s2Signature];
 
-  await mSigAsS3.getTransactionsInfo().then((_info) => {console.log("Transactions Info", _info)})
+  await mSigAsS3.getTransactionsInfo().then((_info) => {
+    console.log("Transactions Info", _info);
+  });
 
   await mSigAsS3.confirmAndExecuteTransaction(
     transactionIndex,
@@ -163,7 +169,9 @@ async function main() {
     signatures
   );
 
-  await mSigAsS3.getTransactionsInfo().then((_info) => {console.log("Transactions Info", _info)})
+  await mSigAsS3.getTransactionsInfo().then((_info) => {
+    console.log("Transactions Info", _info);
+  });
 
   // fetch submitted transaction details
   console.log("Transaction: 0");

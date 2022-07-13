@@ -19,6 +19,7 @@ contract PhenixMultiSig {
     event RejectTransaction(address indexed owner, uint256 indexed txIndex);
     event ExecuteTransaction(address indexed owner, uint256 indexed txIndex);
 
+    string public name;
     address[] public owners;
     mapping(address => bool) public isOwner;
     uint256 public numConfirmationsRequired;
@@ -69,7 +70,7 @@ contract PhenixMultiSig {
         _;
     }
 
-    constructor(address[] memory _owners, uint256 _numConfirmationsRequired) {
+    constructor(string memory _name, address[] memory _owners, uint256 _numConfirmationsRequired) {
         require(_owners.length > 0, "No owners provided.");
         require(
             _numConfirmationsRequired > 0 &&
@@ -87,6 +88,7 @@ contract PhenixMultiSig {
             owners.push(owner);
         }
 
+        name = _name;
         numConfirmationsRequired = _numConfirmationsRequired;
     }
 

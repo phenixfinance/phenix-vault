@@ -26,8 +26,6 @@ contract PhenixMultiSigFactory is Ownable {
     uint256 public erc721DiscountPercentage;
     uint256 public erc721DiscountPercentageDenominator;
     address public feeAllocationAddress;
-    uint256 public feeAllocationPercentage;
-    uint256 public feeAllocationPercentageDenominator;
 
     bool public isEnabled;
 
@@ -62,9 +60,6 @@ contract PhenixMultiSigFactory is Ownable {
 
         erc721DiscountPercentage = 25;
         erc721DiscountPercentageDenominator = 100;
-
-        feeAllocationPercentage = 1;
-        feeAllocationPercentageDenominator = 100;
 
         isEnabled = true;
 
@@ -140,14 +135,6 @@ contract PhenixMultiSigFactory is Ownable {
         erc721DiscountPercentageDenominator = _denominator;
     }
 
-    function setFeeAllocationPercentage(
-        uint256 _percentage,
-        uint256 _denominator
-    ) external onlyOwner {
-        feeAllocationPercentage = _percentage;
-        feeAllocationPercentageDenominator = _denominator;
-    }
-
     function setPayableTokenAddress(address _tokenAddress) external onlyOwner {
         payableTokenAddress = _tokenAddress;
     }
@@ -170,6 +157,14 @@ contract PhenixMultiSigFactory is Ownable {
         returns (uint256)
     {
         return contractType[_contractAddress];
+    }
+
+    function setMultiSigWalletType(address _contractAddress, uint256 _type)
+        external
+        isValidType(_type)
+        onlyOwner
+    {
+        contractType[_contractAddress] = _type;
     }
 
     function getMultiSigWalletInfo(address _contractAddress)
@@ -240,6 +235,7 @@ contract PhenixMultiSigFactory is Ownable {
     }
 
     function generateMultiSigWalletWithETH(
+        string memory _name,
         address[] calldata _owners,
         uint256 _numConfirmationsRequired,
         uint256 _type
@@ -258,10 +254,16 @@ contract PhenixMultiSigFactory is Ownable {
             "Not enough ETH to cover cost."
         );
 
-        _generateMultiSigWallet(_owners, _numConfirmationsRequired, _type);
+        _generateMultiSigWallet(
+            _name,
+            _owners,
+            _numConfirmationsRequired,
+            _type
+        );
     }
 
     function generateMultiSigWalletWithTokens(
+        string memory _name,
         address[] calldata _owners,
         uint256 _numConfirmationsRequired,
         uint256 _type
@@ -286,15 +288,22 @@ contract PhenixMultiSigFactory is Ownable {
             amountToPay
         );
 
-        _generateMultiSigWallet(_owners, _numConfirmationsRequired, _type);
+        _generateMultiSigWallet(
+            _name,
+            _owners,
+            _numConfirmationsRequired,
+            _type
+        );
     }
 
     function _generateMultiSigWallet(
+        string memory _name,
         address[] calldata _owners,
         uint256 _numConfirmationsRequired,
         uint256 _type
     ) internal {
         PhenixMultiSig _newMultiSigWallet = new PhenixMultiSig(
+            _name,
             _owners,
             _numConfirmationsRequired
         );
