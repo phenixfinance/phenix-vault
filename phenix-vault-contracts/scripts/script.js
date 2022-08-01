@@ -97,7 +97,8 @@ async function main() {
   await mSigAsS1.submitTransaction(
     signer2.address,
     hre.ethers.utils.parseEther("5.0"),
-    "0x"
+    "0x",
+    "TOKEN|" + signer2.address
   );
 
   console.log("Signer 2 Balance:", await signer2.getBalance());

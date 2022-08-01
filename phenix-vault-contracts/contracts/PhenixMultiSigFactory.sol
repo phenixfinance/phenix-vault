@@ -1,6 +1,8 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 import "./PhenixMultiSig.sol";
+import "./IUniswapV2Router02.sol";
+import "./IUniswapV2Pair.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -9,29 +11,20 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 contract PhenixMultiSigFactory is Ownable {
     using SafeMath for uint256;
 
-    // Phenix MultiSig Factory Functionality
-    /*
-     * - Allow end users to pay a fee to generate their own multi-sig wallet (contract) via this factory contract
-     * - The fees paids to generate a multi-sig wallet will be paid in CRO (dynamic fee)
-     * - Users can alternatively use PHNX tokens to pay for a multi-sig wallet (utility) (dynamic fee)
-     * - Users can select from an array of settings when generating a multi-sig wallet which is fed into the initialize of the main MSW contract
-     * - Users can opt into the "Transparency Plus" feature which will allow them to show their community a detailed view of their multi-sig transactiosn (extra fee)
-     * - Fees will be store on the multi-sig factory contract and can be withdrawn by the contract owner.
-     * -
-     */
-
     address constant DEAD = 0x000000000000000000000000000000000000dEaD;
     address public payableTokenAddress;
     address public erc721TokenAddress;
     uint256 public erc721DiscountPercentage;
     uint256 public erc721DiscountPercentageDenominator;
-    address public feeAllocationAddress;
+    address public routerAddress = 0x145677FC4d9b8F19B5D56d1820c48e0443049a30;
+    address public usdcPairAddress = 0xa68466208F1A3Eb21650320D2520ee8eBA5ba623;
 
     bool public isEnabled;
 
     struct Fees {
         uint256 feeETH;
         uint256 feeToken;
+        bool usdcMode;
     }
 
     struct MultiSigWalletInfo {
@@ -51,20 +44,23 @@ contract PhenixMultiSigFactory is Ownable {
         uint256 _multiSigDeploymentETHFee,
         uint256 _multiSigDeploymentTokenFee,
         address _payableTokenAddress,
-        address _erc721TokenAddress,
-        address _feeAllocationAddress
+        address _erc721TokenAddress
     ) {
         payableTokenAddress = _payableTokenAddress;
         erc721TokenAddress = _erc721TokenAddress;
-        feeAllocationAddress = _feeAllocationAddress;
 
-        erc721DiscountPercentage = 25;
+        erc721DiscountPercentage = 10;
         erc721DiscountPercentageDenominator = 100;
 
         isEnabled = true;
 
         _setAdminAddress(msg.sender, true);
-        _setTypeFee(0, _multiSigDeploymentETHFee, _multiSigDeploymentTokenFee);
+        _setTypeFee(
+            0,
+            _multiSigDeploymentETHFee,
+            _multiSigDeploymentTokenFee,
+            false
+        );
     }
 
     modifier canPayTokenFee(uint256 _type) {
@@ -105,18 +101,29 @@ contract PhenixMultiSigFactory is Ownable {
     function _setTypeFee(
         uint256 _index,
         uint256 _ethFee,
-        uint256 _tokenFee
+        uint256 _tokenFee,
+        bool _usdcMode
     ) internal {
         multiSigTypeFees[_index].feeETH = _ethFee;
         multiSigTypeFees[_index].feeToken = _tokenFee;
+        multiSigTypeFees[_index].usdcMode = _usdcMode;
     }
 
     function setTypeFee(
         uint256 _index,
         uint256 _ethFee,
-        uint256 _tokenFee
+        uint256 _tokenFee,
+        bool _usdcMode
     ) external onlyOwner {
-        _setTypeFee(_index, _ethFee, _tokenFee);
+        _setTypeFee(_index, _ethFee, _tokenFee, _usdcMode);
+    }
+
+    function setRouterAddress(address _routerAddress) external onlyOwner {
+        routerAddress = _routerAddress;
+    }
+
+    function setUSDCPairAddress(address _usdcPairAddress) external onlyOwner {
+        usdcPairAddress = _usdcPairAddress;
     }
 
     function _setAdminAddress(address _admin, bool _state) internal {
@@ -203,19 +210,23 @@ contract PhenixMultiSigFactory is Ownable {
         return deployedContracts.length;
     }
 
-    function takeFees() external onlyOwner {
-        if (IERC20(payableTokenAddress).balanceOf(address(this)) > 0) {
-            IERC20(payableTokenAddress).transfer(
-                msg.sender,
-                IERC20(payableTokenAddress).balanceOf(address(this))
-            );
-        }
+    function takeETHFees() external onlyOwner {
+        require(address(this).balance > 0, "No ETH to claim.");
+        (bool success, ) = address(msg.sender).call{
+            value: address(this).balance
+        }("");
+        require(success, "Failed to claim ETH.");
+    }
 
-        if (address(this).balance > 0) {
-            (bool success, ) = address(msg.sender).call{
-                value: address(this).balance
-            }("");
-        }
+    function takeTokenFees() external onlyOwner {
+        require(
+            IERC20(payableTokenAddress).balanceOf(address(this)) > 0,
+            "No tokens to claim."
+        );
+        IERC20(payableTokenAddress).transfer(
+            msg.sender,
+            IERC20(payableTokenAddress).balanceOf(address(this))
+        );
     }
 
     function userCost(uint256 _amount, address _user)
@@ -231,7 +242,44 @@ contract PhenixMultiSigFactory is Ownable {
             );
             _result = _amount - _result;
         }
-        return factoryAdmins[msg.sender] == false ? _result : 0;
+        return factoryAdmins[_user] == false ? _result : 0;
+    }
+
+    function getFeeETHAmount(uint256 _type) public view returns (uint256) {
+        if (multiSigTypeFees[_type].usdcMode == true) {
+            (uint112 reserve0, uint112 reserve1, ) = IUniswapV2Pair(
+                usdcPairAddress
+            ).getReserves();
+
+            uint256 ethPerUsdc = (reserve0 / reserve1) * 1000000;
+            return ethPerUsdc * (multiSigTypeFees[_type].feeETH / 1 ether);
+        } else {
+            return multiSigTypeFees[_type].feeETH;
+        }
+    }
+
+    function getFeeTokenAmount(uint256 _type) public view returns (uint256) {
+        if (multiSigTypeFees[_type].usdcMode == true) {
+            (uint112 reserve0, uint112 reserve1, ) = IUniswapV2Pair(
+                usdcPairAddress
+            ).getReserves();
+
+            uint256 ethPerUsdc = (reserve0 / reserve1) * 1000000;
+
+            address[] memory path = new address[](2);
+            path[0] = IUniswapV2Router02(routerAddress).WETH();
+            path[1] = payableTokenAddress;
+
+            uint256[] memory amountsOut = IUniswapV2Router02(routerAddress)
+                .getAmountsOut(
+                    ethPerUsdc * (multiSigTypeFees[_type].feeToken / 1 ether),
+                    path
+                );
+
+            return amountsOut[1];
+        } else {
+            return multiSigTypeFees[_type].feeToken;
+        }
     }
 
     function generateMultiSigWalletWithETH(
@@ -240,15 +288,9 @@ contract PhenixMultiSigFactory is Ownable {
         uint256 _numConfirmationsRequired,
         uint256 _type
     ) external payable canGenerateMultiSigWallet isValidType(_type) {
-        require(
-            multiSigTypeFees[_type].feeETH != 0,
-            "No ETH fee set for this type."
-        );
+        require(getFeeETHAmount(_type) != 0, "No ETH fee set for this type.");
 
-        uint256 amountToPay = userCost(
-            multiSigTypeFees[_type].feeETH,
-            msg.sender
-        );
+        uint256 amountToPay = userCost(getFeeETHAmount(_type), msg.sender);
         require(
             msg.value >= userCost(amountToPay, msg.sender),
             "Not enough ETH to cover cost."
@@ -274,14 +316,11 @@ contract PhenixMultiSigFactory is Ownable {
         canGenerateMultiSigWallet
     {
         require(
-            multiSigTypeFees[_type].feeToken != 0,
+            getFeeTokenAmount(_type) != 0,
             "No token fee set for this type."
         );
 
-        uint256 amountToPay = userCost(
-            multiSigTypeFees[_type].feeToken,
-            msg.sender
-        );
+        uint256 amountToPay = userCost(getFeeTokenAmount(_type), msg.sender);
         IERC20(payableTokenAddress).transferFrom(
             msg.sender,
             address(this),

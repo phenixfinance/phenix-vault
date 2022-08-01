@@ -31,6 +31,7 @@ contract PhenixMultiSig {
         bool executed;
         bool rejected;
         uint256 numConfirmations;
+        string info;
     }
 
     struct TransactionsInfo {
@@ -70,7 +71,11 @@ contract PhenixMultiSig {
         _;
     }
 
-    constructor(string memory _name, address[] memory _owners, uint256 _numConfirmationsRequired) {
+    constructor(
+        string memory _name,
+        address[] memory _owners,
+        uint256 _numConfirmationsRequired
+    ) {
         require(_owners.length > 0, "No owners provided.");
         require(
             _numConfirmationsRequired > 0 &&
@@ -99,7 +104,8 @@ contract PhenixMultiSig {
     function submitTransaction(
         address _to,
         uint256 _value,
-        bytes memory _data
+        bytes memory _data,
+        string memory _info
     ) public onlyOwner {
         uint256 txIndex = transactions.length;
 
@@ -110,7 +116,8 @@ contract PhenixMultiSig {
                 data: _data,
                 executed: false,
                 rejected: false,
-                numConfirmations: 0
+                numConfirmations: 0,
+                info: _info
             })
         );
 
@@ -379,7 +386,8 @@ contract PhenixMultiSig {
             bytes memory data,
             bool rejected,
             bool executed,
-            uint256 numConfirmations
+            uint256 numConfirmations,
+            string memory info
         )
     {
         Transaction storage transaction = transactions[_txIndex];
@@ -390,7 +398,8 @@ contract PhenixMultiSig {
             transaction.data,
             transaction.rejected,
             transaction.executed,
-            transaction.numConfirmations
+            transaction.numConfirmations,
+            transaction.info
         );
     }
 
