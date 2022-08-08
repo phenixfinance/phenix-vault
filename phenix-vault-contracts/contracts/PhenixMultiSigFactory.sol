@@ -245,6 +245,14 @@ contract PhenixMultiSigFactory is Ownable {
         return factoryAdmins[_user] == false ? _result : 0;
     }
 
+    function getFeeAmountsOfType(uint256 _type)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        return (getFeeETHAmount(_type), getFeeTokenAmount(_type));
+    }
+
     function getFeeETHAmount(uint256 _type) public view returns (uint256) {
         if (multiSigTypeFees[_type].usdcMode == true) {
             (uint112 reserve0, uint112 reserve1, ) = IUniswapV2Pair(
