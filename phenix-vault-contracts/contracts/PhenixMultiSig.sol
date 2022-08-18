@@ -256,7 +256,7 @@ contract PhenixMultiSig {
     }
 
     function getBalance() external view returns (uint256) {
-        return address(this).value;
+        return address(this).balance;
     }
 
     function numberOfPendingTransactions() public view returns (uint256) {
