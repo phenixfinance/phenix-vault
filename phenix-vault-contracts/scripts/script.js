@@ -39,8 +39,7 @@ async function main() {
     hre.ethers.utils.parseEther("100"),
     hre.ethers.utils.parseEther("500"),
     token.address,
-    nft.address,
-    signer1.address
+    nft.address
   );
 
   await phenixMultiSigFactory.deployed();
@@ -156,12 +155,11 @@ async function main() {
   // prepare data
   const transactionIndex = "0";
   const timestamps = [currentTime, currentTime, currentTime];
-  const signers = [owners[2], owners[0], owners[1]];
-  const signatures = [s3Signature, s1Signature, s2Signature];
+  const signers = [owners[2], owners[1], owners[0]];
+  const signatures = [s3Signature, s2Signature, s1Signature];
 
-  await mSigAsS3.getTransactionsInfo().then((_info) => {
-    console.log("Transactions Info", _info);
-  });
+  console.log(signers);
+
 
   await mSigAsS3.confirmAndExecuteTransaction(
     transactionIndex,
@@ -169,10 +167,6 @@ async function main() {
     signers,
     signatures
   );
-
-  await mSigAsS3.getTransactionsInfo().then((_info) => {
-    console.log("Transactions Info", _info);
-  });
 
   // fetch submitted transaction details
   console.log("Transaction: 0");

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "hardhat/console.sol";
 
 contract PhenixMultiSig {
     using SafeMath for uint256;
@@ -66,7 +67,7 @@ contract PhenixMultiSig {
         _;
     }
 
-    modifier notConfirmed(uint256 _txIndex) {
+    modifier notConfirmed(uint256 _txIndex, address _signer) {
         require(!isConfirmed[_txIndex][msg.sender], "tx already confirmed");
         _;
     }
@@ -124,18 +125,10 @@ contract PhenixMultiSig {
         emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
     }
 
-    function confirmTransaction(uint256 _txIndex)
-        public
-        onlyOwner
-        txExists(_txIndex)
-        notExecuted(_txIndex)
-        notConfirmed(_txIndex)
-        notRejected(_txIndex)
+    function _confirmTransaction(uint256 _txIndex, address _signer)
+        internal
+        notConfirmed(_txIndex, _signer)
     {
-        _confirmTransaction(_txIndex, msg.sender);
-    }
-
-    function _confirmTransaction(uint256 _txIndex, address _signer) internal {
         Transaction storage transaction = transactions[_txIndex];
         transaction.numConfirmations += 1;
         isConfirmed[_txIndex][_signer] = true;
@@ -251,134 +244,32 @@ contract PhenixMultiSig {
         emit Deposit(msg.sender, msg.value, address(this).balance);
     }
 
-    function getTransactions() external view returns (Transaction[] memory) {
-        return transactions;
+    function getTransactions(uint256 _count)
+        external
+        view
+        returns (Transaction[] memory)
+    {
+        if (_count == 0) {
+            return transactions;
+        } else {
+            uint256 _transactionsCount = _count > transactions.length
+                ? transactions.length
+                : _count;
+
+            Transaction[] memory _transactions = new Transaction[](
+                _transactionsCount
+            );
+
+            for (uint256 i = 0; i < _transactionsCount; i++) {
+                _transactions[i] = transactions[i];
+            }
+
+            return _transactions;
+        }
     }
 
     function getBalance() external view returns (uint256) {
         return address(this).balance;
-    }
-
-    function numberOfPendingTransactions() public view returns (uint256) {
-        uint256 result = 0;
-
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (
-                transactions[i].numConfirmations != numConfirmationsRequired &&
-                transactions[i].executed == false &&
-                transactions[i].rejected == false
-            ) {
-                result = result.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function getPendingTransaction()
-        external
-        view
-        returns (Transaction[] memory)
-    {
-        Transaction[] memory result = new Transaction[](
-            numberOfPendingTransactions()
-        );
-
-        uint256 index = 0;
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (
-                transactions[i].numConfirmations != numConfirmationsRequired &&
-                transactions[i].executed == false &&
-                transactions[i].rejected == false
-            ) {
-                result[index] = transactions[i];
-                index = index.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function numberOfExecutedTransactions() public view returns (uint256) {
-        uint256 result = 0;
-
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (transactions[i].executed == true) {
-                result = result.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function getExecutedTransactions()
-        external
-        view
-        returns (Transaction[] memory)
-    {
-        Transaction[] memory result = new Transaction[](
-            numberOfExecutedTransactions()
-        );
-
-        uint256 index = 0;
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (transactions[i].executed == true) {
-                result[index] = transactions[i];
-                index = index.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function numberOfConfirmedTransactions() public view returns (uint256) {
-        uint256 result = 0;
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (
-                transactions[i].numConfirmations == numConfirmationsRequired &&
-                transactions[i].executed == false
-            ) {
-                result = result.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function getConfirmedTransactions()
-        external
-        view
-        returns (Transaction[] memory)
-    {
-        Transaction[] memory result = new Transaction[](
-            numberOfConfirmedTransactions()
-        );
-
-        uint256 index = 0;
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (
-                transactions[i].numConfirmations == numConfirmationsRequired &&
-                transactions[i].executed == false
-            ) {
-                result[index] = transactions[i];
-                index = index.add(1);
-            }
-        }
-
-        return result;
-    }
-
-    function getTransactionsInfo()
-        external
-        view
-        returns (TransactionsInfo memory)
-    {
-        return
-            TransactionsInfo(
-                numberOfConfirmedTransactions(),
-                numberOfPendingTransactions(),
-                numberOfExecutedTransactions()
-            );
     }
 
     function getTransaction(uint256 _txIndex)

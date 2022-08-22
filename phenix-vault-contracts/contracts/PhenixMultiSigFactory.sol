@@ -68,13 +68,13 @@ contract PhenixMultiSigFactory is Ownable {
             IERC20(payableTokenAddress).allowance(
                 address(msg.sender),
                 address(this)
-            ) >= userCost(multiSigTypeFees[_type].feeToken, msg.sender),
+            ) >= userCost(getFeeTokenAmount(_type), msg.sender),
             "PhenixMultiSigFactory contract does not have enough allowance to spend tokens on behalf of the user."
         );
 
         require(
             IERC20(payableTokenAddress).balanceOf(address(msg.sender)) >=
-                userCost(multiSigTypeFees[_type].feeToken, msg.sender),
+                userCost(getFeeTokenAmount(_type), msg.sender),
             "User does not have enough tokens to pay for PhenixMultiSig deployment fee."
         );
 
@@ -303,6 +303,12 @@ contract PhenixMultiSigFactory is Ownable {
             msg.value >= userCost(amountToPay, msg.sender),
             "Not enough ETH to cover cost."
         );
+
+        if (msg.value > amountToPay) {
+            (bool success, ) = address(msg.sender).call{
+                value: uint256(msg.value).sub(amountToPay)
+            }("");
+        }
 
         _generateMultiSigWallet(
             _name,
