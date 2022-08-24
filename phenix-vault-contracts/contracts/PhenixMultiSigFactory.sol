@@ -16,8 +16,11 @@ contract PhenixMultiSigFactory is Ownable {
     address public erc721TokenAddress;
     uint256 public erc721DiscountPercentage;
     uint256 public erc721DiscountPercentageDenominator;
-    address public routerAddress = 0x145677FC4d9b8F19B5D56d1820c48e0443049a30;
-    address public usdcPairAddress = 0xa68466208F1A3Eb21650320D2520ee8eBA5ba623;
+    //address public routerAddress = 0x145677FC4d9b8F19B5D56d1820c48e0443049a30; LIVE
+    address public routerAddress = 0x2fFAa0794bf59cA14F268A7511cB6565D55ed40b;
+
+    // address public usdcPairAddress = 0xa68466208F1A3Eb21650320D2520ee8eBA5ba623; LIVE
+    address public usdcPairAddress = 0x4003bE1b4f747CE2549D5Ffba7A1014477EDF614;
 
     bool public isEnabled;
 
@@ -248,9 +251,17 @@ contract PhenixMultiSigFactory is Ownable {
     function getFeeAmountsOfType(uint256 _type)
         external
         view
-        returns (uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            bool
+        )
     {
-        return (getFeeETHAmount(_type), getFeeTokenAmount(_type));
+        return (
+            getFeeETHAmount(_type),
+            getFeeTokenAmount(_type),
+            multiSigTypeFees[_type].usdcMode
+        );
     }
 
     function getFeeETHAmount(uint256 _type) public view returns (uint256) {

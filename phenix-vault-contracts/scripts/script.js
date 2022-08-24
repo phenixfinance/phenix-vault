@@ -85,20 +85,23 @@ async function main() {
   const mSigAsS3 = multisig.connect(signer3);
 
   // send funds to multiSig wallet
+
   const tx = {
     to: multisig.address,
-    value: hre.ethers.utils.parseEther("100.0"),
+    value: hre.ethers.utils.parseEther("10000.0"),
   };
 
   await signer1.sendTransaction(tx);
 
-  // submit transaction @ index 0
-  await mSigAsS1.submitTransaction(
-    signer2.address,
-    hre.ethers.utils.parseEther("5.0"),
-    "0x",
-    "TOKEN|" + signer2.address
-  );
+  for (var i = 0; i < 10; i++) {
+    // submit transaction @ index \i
+    await mSigAsS1.submitTransaction(
+      signer2.address,
+      hre.ethers.utils.parseEther((Math.random() * 50).toString()),
+      "0x",
+      "TOKEN|" + signer2.address
+    );
+  }
 
   console.log("Signer 2 Balance:", await signer2.getBalance());
   console.log(
@@ -121,57 +124,55 @@ async function main() {
     console.log(_transaction);
   });
 
-  // sign some messages
+  for (var i = 0; i < 10; i++) {
+    // sign some messages
 
-  // #1
-  const s1HashMessage = await mSigAsS1.getMessageHash(
-    "0",
-    currentTime.toString()
-  );
-  const s1Signature = await signer1.signMessage(
-    hre.ethers.utils.arrayify(s1HashMessage)
-  );
-  // console.log(s1Signature);
+    // #1
+    const s1HashMessage = await mSigAsS1.getMessageHash(
+      i,
+      currentTime.toString()
+    );
+    const s1Signature = await signer1.signMessage(
+      hre.ethers.utils.arrayify(s1HashMessage)
+    );
+    // console.log(s1Signature);
 
-  // #2
-  const s2HashMessage = await mSigAsS2.getMessageHash(
-    "0",
-    currentTime.toString()
-  );
-  const s2Signature = await signer2.signMessage(
-    hre.ethers.utils.arrayify(s2HashMessage)
-  );
-  // console.log(s2Signature);
+    // #2
+    const s2HashMessage = await mSigAsS2.getMessageHash(
+      i,
+      currentTime.toString()
+    );
+    const s2Signature = await signer2.signMessage(
+      hre.ethers.utils.arrayify(s2HashMessage)
+    );
+    // console.log(s2Signature);
 
-  // #3
-  const s3HashMessage = await mSigAsS3.getMessageHash(
-    "0",
-    currentTime.toString()
-  );
-  const s3Signature = await signer3.signMessage(
-    hre.ethers.utils.arrayify(s3HashMessage)
-  );
+    // #3
+    const s3HashMessage = await mSigAsS3.getMessageHash(
+      i,
+      currentTime.toString()
+    );
+    const s3Signature = await signer3.signMessage(
+      hre.ethers.utils.arrayify(s3HashMessage)
+    );
 
-  // prepare data
-  const transactionIndex = "0";
-  const timestamps = [currentTime, currentTime, currentTime];
-  const signers = [owners[2], owners[1], owners[0]];
-  const signatures = [s3Signature, s2Signature, s1Signature];
+    // prepare data
+    const timestamps = [currentTime, currentTime, currentTime];
+    const signers = [owners[0], owners[1], owners[2]];
+    const signatures = [s1Signature, s2Signature, s3Signature];
 
-  console.log(signers);
-
-
-  await mSigAsS3.confirmAndExecuteTransaction(
-    transactionIndex,
-    timestamps,
-    signers,
-    signatures
-  );
+    await mSigAsS3.confirmAndExecuteTransaction(
+      i,
+      timestamps,
+      signers,
+      signatures
+    );
+  }
 
   // fetch submitted transaction details
   console.log("Transaction: 0");
-  await mSigAsS1.getTransaction(0).then((_transaction) => {
-    console.log(_transaction);
+  await mSigAsS1.getTransactions(0).then((_transactions) => {
+    console.log(_transactions);
   });
 
   // verify

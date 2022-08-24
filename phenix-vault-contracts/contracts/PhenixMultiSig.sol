@@ -68,7 +68,8 @@ contract PhenixMultiSig {
     }
 
     modifier notConfirmed(uint256 _txIndex, address _signer) {
-        require(!isConfirmed[_txIndex][msg.sender], "tx already confirmed");
+        console.log(_signer);
+        require(!isConfirmed[_txIndex][_signer], "tx already confirmed");
         _;
     }
 
@@ -249,23 +250,20 @@ contract PhenixMultiSig {
         view
         returns (Transaction[] memory)
     {
-        if (_count == 0) {
-            return transactions;
-        } else {
-            uint256 _transactionsCount = _count > transactions.length
-                ? transactions.length
-                : _count;
+        uint256 _transactionsCount = _count >= transactions.length ||
+            _count == 0
+            ? transactions.length
+            : _count;
 
-            Transaction[] memory _transactions = new Transaction[](
-                _transactionsCount
-            );
+        Transaction[] memory _transactions = new Transaction[](
+            _transactionsCount
+        );
 
-            for (uint256 i = 0; i < _transactionsCount; i++) {
-                _transactions[i] = transactions[i];
-            }
-
-            return _transactions;
+        for (uint256 i = _transactionsCount; i > 0; i--) {
+            _transactions[i - 1] = transactions[i - 1];
         }
+
+        return _transactions;
     }
 
     function getBalance() external view returns (uint256) {
