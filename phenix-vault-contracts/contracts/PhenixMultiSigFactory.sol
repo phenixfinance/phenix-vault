@@ -381,6 +381,5 @@ contract PhenixMultiSigFactory is Ownable {
         }
 
         contractType[address(_newMultiSigWallet)] = _type;
-        deployedContracts.push(address(_newMultiSigWallet));
     }
 }

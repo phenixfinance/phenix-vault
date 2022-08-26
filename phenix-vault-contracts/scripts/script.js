@@ -12,6 +12,7 @@ async function main() {
   const signer1 = await hre.ethers.getSigner(0);
   const signer2 = await hre.ethers.getSigner(1);
   const signer3 = await hre.ethers.getSigner(2);
+  const signer4 = await hre.ethers.getSigner(3);
 
   const owners = [
     await signer1.getAddress(),
@@ -58,10 +59,12 @@ async function main() {
   // signer 1 mint NFT
   await nft.mint(1);
 
+  await signer2.getBalance().then((_bal) => { console.log(hre.ethers.utils.formatEther(_bal)); })
+
   await phenixMultiSigFactory
-    .connect(signer1)
+    .connect(signer2)
     .generateMultiSigWalletWithETH("Jake's Wallet", owners, 3, 0, {
-      value: hre.ethers.utils.parseEther("0"),
+      value: hre.ethers.utils.parseEther("500000"),
     })
     .then(async (_data) => {
       await _data.wait().then(async (_res) => {
@@ -73,6 +76,8 @@ async function main() {
           });
       });
     });
+
+  await signer2.getBalance().then((_bal) => { console.log(hre.ethers.utils.formatEther(_bal)); })
 
   const multisig = await hre.ethers.getContractAt(
     "PhenixMultiSig",
