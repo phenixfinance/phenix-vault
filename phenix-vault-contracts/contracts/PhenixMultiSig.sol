@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "hardhat/console.sol";
 
 contract PhenixMultiSig {
     using SafeMath for uint256;
@@ -68,7 +67,6 @@ contract PhenixMultiSig {
     }
 
     modifier notConfirmed(uint256 _txIndex, address _signer) {
-        console.log(_signer);
         require(!isConfirmed[_txIndex][_signer], "tx already confirmed");
         _;
     }
