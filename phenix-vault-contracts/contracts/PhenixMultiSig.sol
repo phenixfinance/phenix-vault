@@ -15,8 +15,6 @@ contract PhenixMultiSig {
         bytes data
     );
     event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);
-    event RevokeConfirmation(address indexed owner, uint256 indexed txIndex);
-    event RejectTransaction(address indexed owner, uint256 indexed txIndex);
     event ExecuteTransaction(address indexed owner, uint256 indexed txIndex);
 
     string public name;
@@ -29,7 +27,6 @@ contract PhenixMultiSig {
         uint256 value;
         bytes data;
         bool executed;
-        bool rejected;
         uint256 numConfirmations;
         string info;
     }
@@ -40,9 +37,7 @@ contract PhenixMultiSig {
         uint256 numberOfExecuted;
     }
 
-    // mapping from tx index => owner => bool
     mapping(uint256 => mapping(address => bool)) public isConfirmed;
-    mapping(uint256 => mapping(address => bool)) public isRejected;
 
     Transaction[] public transactions;
 
@@ -58,11 +53,6 @@ contract PhenixMultiSig {
 
     modifier notExecuted(uint256 _txIndex) {
         require(!transactions[_txIndex].executed, "tx already executed");
-        _;
-    }
-
-    modifier notRejected(uint256 _txIndex) {
-        require(!transactions[_txIndex].rejected, "tx rejected");
         _;
     }
 
@@ -115,7 +105,6 @@ contract PhenixMultiSig {
                 value: _value,
                 data: _data,
                 executed: false,
-                rejected: false,
                 numConfirmations: 0,
                 info: _info
             })
@@ -140,13 +129,7 @@ contract PhenixMultiSig {
         uint256[] memory _timestamps,
         address[] memory _signers,
         bytes[] memory _signatures
-    )
-        external
-        onlyOwner
-        txExists(_txIndex)
-        notExecuted(_txIndex)
-        notRejected(_txIndex)
-    {
+    ) external onlyOwner txExists(_txIndex) notExecuted(_txIndex) {
         require(
             _signatures.length == _signers.length && _signatures.length > 0,
             "There must be the same amount as signatures as there is signers."
@@ -178,7 +161,6 @@ contract PhenixMultiSig {
         onlyOwner
         txExists(_txIndex)
         notExecuted(_txIndex)
-        notRejected(_txIndex)
     {
         _executeTransaction(_txIndex);
     }
@@ -199,36 +181,6 @@ contract PhenixMultiSig {
         require(success, "tx failed");
 
         emit ExecuteTransaction(msg.sender, _txIndex);
-    }
-
-    function revokeConfirmation(uint256 _txIndex)
-        public
-        onlyOwner
-        txExists(_txIndex)
-        notExecuted(_txIndex)
-    {
-        Transaction storage transaction = transactions[_txIndex];
-
-        require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
-
-        transaction.numConfirmations -= 1;
-        isConfirmed[_txIndex][msg.sender] = false;
-
-        emit RevokeConfirmation(msg.sender, _txIndex);
-    }
-
-    function rejectTransaction(uint256 _txIndex)
-        public
-        onlyOwner
-        txExists(_txIndex)
-        notExecuted(_txIndex)
-    {
-        Transaction storage transaction = transactions[_txIndex];
-
-        transaction.rejected = true;
-        isRejected[_txIndex][msg.sender] = true;
-
-        emit RejectTransaction(msg.sender, _txIndex);
     }
 
     function getOwners() public view returns (address[] memory) {
@@ -258,7 +210,7 @@ contract PhenixMultiSig {
         );
 
         for (uint256 i = _transactionsCount; i > 0; i--) {
-            _transactions[i - 1] = transactions[i - 1];
+            _transactions[i - 1] = transactions[(transactions.length - i)];
         }
 
         return _transactions;
@@ -275,7 +227,6 @@ contract PhenixMultiSig {
             address to,
             uint256 value,
             bytes memory data,
-            bool rejected,
             bool executed,
             uint256 numConfirmations,
             string memory info
@@ -287,7 +238,6 @@ contract PhenixMultiSig {
             transaction.to,
             transaction.value,
             transaction.data,
-            transaction.rejected,
             transaction.executed,
             transaction.numConfirmations,
             transaction.info

@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 import "./PhenixMultiSig.sol";
 import "./IUniswapV2Router02.sol";
 import "./IUniswapV2Pair.sol";
+import "./WalletDeployer.sol";
+import "./IWalletDeployer.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -13,14 +15,12 @@ contract PhenixMultiSigFactory is Ownable {
 
     address constant DEAD = 0x000000000000000000000000000000000000dEaD;
     address public payableTokenAddress;
+    address public walletDeployerAddress;
     address public erc721TokenAddress;
     uint256 public erc721DiscountPercentage;
     uint256 public erc721DiscountPercentageDenominator;
-    //address public routerAddress = 0x145677FC4d9b8F19B5D56d1820c48e0443049a30; LIVE
-    address public routerAddress = 0x2fFAa0794bf59cA14F268A7511cB6565D55ed40b;
-
-    // address public usdcPairAddress = 0xa68466208F1A3Eb21650320D2520ee8eBA5ba623; LIVE
-    address public usdcPairAddress = 0x4003bE1b4f747CE2549D5Ffba7A1014477EDF614;
+    address public routerAddress = 0x145677FC4d9b8F19B5D56d1820c48e0443049a30;
+    address public usdcPairAddress = 0xa68466208F1A3Eb21650320D2520ee8eBA5ba623;
 
     bool public isEnabled;
 
@@ -43,27 +43,24 @@ contract PhenixMultiSigFactory is Ownable {
 
     address[] public deployedContracts;
 
-    constructor(
-        uint256 _multiSigDeploymentETHFee,
-        uint256 _multiSigDeploymentTokenFee,
-        address _payableTokenAddress,
-        address _erc721TokenAddress
-    ) {
+    constructor(address _payableTokenAddress, address _erc721TokenAddress) {
         payableTokenAddress = _payableTokenAddress;
         erc721TokenAddress = _erc721TokenAddress;
 
         erc721DiscountPercentage = 10;
         erc721DiscountPercentageDenominator = 100;
 
+        WalletDeployer deployer = new WalletDeployer(address(this));
+        walletDeployerAddress = address(deployer);
+
         isEnabled = true;
 
         _setAdminAddress(msg.sender, true);
-        _setTypeFee(
-            0,
-            _multiSigDeploymentETHFee,
-            _multiSigDeploymentTokenFee,
-            false
-        );
+
+        // MSig Wallet Type: 1
+        _setTypeFee(0, 50 ether, 50 ether, true);
+        // MSig Wallet Type: 2
+        _setTypeFee(1, 150 ether, 150 ether, true);
     }
 
     modifier canPayTokenFee(uint256 _type) {
@@ -121,6 +118,13 @@ contract PhenixMultiSigFactory is Ownable {
         _setTypeFee(_index, _ethFee, _tokenFee, _usdcMode);
     }
 
+    function setWalletDeployerAddress(address _walletDeployerAddress)
+        external
+        onlyOwner
+    {
+        walletDeployerAddress = _walletDeployerAddress;
+    }
+
     function setRouterAddress(address _routerAddress) external onlyOwner {
         routerAddress = _routerAddress;
     }
@@ -147,6 +151,13 @@ contract PhenixMultiSigFactory is Ownable {
 
     function setPayableTokenAddress(address _tokenAddress) external onlyOwner {
         payableTokenAddress = _tokenAddress;
+    }
+
+    function setERC721TokenAddress(address _erc721TokenAddress)
+        external
+        onlyOwner
+    {
+        erc721TokenAddress = _erc721TokenAddress;
     }
 
     function setIsEnabled(bool _state) external onlyOwner {
@@ -366,11 +377,8 @@ contract PhenixMultiSigFactory is Ownable {
         uint256 _numConfirmationsRequired,
         uint256 _type
     ) internal {
-        PhenixMultiSig _newMultiSigWallet = new PhenixMultiSig(
-            _name,
-            _owners,
-            _numConfirmationsRequired
-        );
+        address _newMultiSigWallet = IWalletDeployer(walletDeployerAddress)
+            .generateMultiSigWallet(_name, _owners, _numConfirmationsRequired);
 
         deployedContracts.push(address(_newMultiSigWallet));
         contractToOwnersMapping[address(_newMultiSigWallet)] = _owners;

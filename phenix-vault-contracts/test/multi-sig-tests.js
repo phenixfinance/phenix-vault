@@ -65,8 +65,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
       ethers.utils.parseEther("100"),
       ethers.utils.parseEther("500"),
       token.address,
-      nft.address,
-      deployer.address
+      nft.address
     );
 
     await phenixMultiSigFactory.deployed();
@@ -161,8 +160,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
       ethers.utils.parseEther("100"),
       ethers.utils.parseEther("500"),
       token.address,
-      nft.address,
-      deployer.address
+      nft.address
     );
 
     await phenixMultiSigFactory.deployed();
@@ -274,8 +272,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
       ethers.utils.parseEther("100"),
       ethers.utils.parseEther("500"),
       token.address,
-      nft.address,
-      deployer.address
+      nft.address
     );
 
     await phenixMultiSigFactory.deployed();
@@ -322,7 +319,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
 
     expect(
       parseInt(ethers.utils.formatEther(walletGenerationETHCost))
-    ).to.equal(100 * 0.75);
+    ).to.equal(100 * 0.9);
 
     // (3): Generate Multi-Sig wallet with calculated user cost in ETH
     await phenixMultiSigFactory
@@ -394,8 +391,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
       ethers.utils.parseEther("100"),
       ethers.utils.parseEther("500"),
       token.address,
-      nft.address,
-      deployer.address
+      nft.address
     );
 
     await phenixMultiSigFactory.deployed();
@@ -442,7 +438,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
 
     expect(
       parseInt(ethers.utils.formatEther(walletGenerationTokenCost))
-    ).to.equal(500 * 0.75);
+    ).to.equal(500 * 0.9);
 
     // (3): Generate Multi-Sig wallet with calculated user cost in ETH
     await phenixMultiSigFactory
@@ -513,8 +509,7 @@ describe("MultiSigFactory Contract + MultiSig Contract Test Cases", function () 
       ethers.utils.parseEther("100"),
       ethers.utils.parseEther("500"),
       token.address,
-      nft.address,
-      deployer.address
+      nft.address
     );
 
     await phenixMultiSigFactory.deployed();
